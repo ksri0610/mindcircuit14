@@ -13,20 +13,25 @@ pipeline {
     }
 
     stages {
-        stage('git checkout') {
+        stage('Git Checkout') {
             steps {
-                echo 'Cloning GIT HUB Repo'
-                git branch: 'main', url: 'https://github.com/ksri0610/mindcircuit14.git'
+                echo 'Cloning GitHub Repository'
+                git branch: 'main', 
+                     url: "https://github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git",
+                     credentialsId: 'githubtoken'
             }
         }
 
-        stage('sonar scan') {
+        stage('SonarQube Scan') {
             steps {
-                echo 'scanning project'
-                sh 'ls -ltrh'
-                sh ''' mvn sonar:sonar \\
-                      -Dsonar.host.url=http://3.108.217.213:9000/ \\
-                      -Dsonar.login=squ_86101f43372b5e91d652da644eb1b9790161db57'''
+                echo 'Running SonarQube Analysis'
+                withSonarQubeEnv('SonarQube') {
+                    sh """
+                        mvn sonar:sonar \
+                        -Dsonar.host.url=http://3.108.217.213:9000/ \
+                        -Dsonar.login=squ_86101f43372b5e91d652da644eb1b9790161db57
+                    """
+                }
             }
         }
 
@@ -37,22 +42,22 @@ pipeline {
             }
         }
 
-        stage('Docker Image') {
+        stage('Build Docker Image') {
             steps {
                 echo 'Building Docker Image'
-                sh 'docker build -t devopshubg333/batch14:${BUILD_NUMBER} -f Dockerfile .'
+                script {
+                    dockerImage = docker.build("devopshubg333/batch14:${env.BUILD_NUMBER}")
+                }
             }
         }
 
-
-        stage('Push to Dockerhub') {
+        stage('Push to DockerHub') {
             steps {
+                echo 'Pushing Image to DockerHub'
                 script {
-                    withCredentials([string(credentialsId: 'DOCKERHUB_CREDENTIALS', variable: 'dockerhub')]) {
-                        sh 'docker login -u dockerksri0610 -p ${dockerhub}'
+                    docker.withRegistry('', 'dockerhub') {
+                        dockerImage.push()
                     }
-                    sh 'docker push devopshubg333/batch14:${BUILD_NUMBER}'
-                    echo 'Pushed to Dockerhub'
                 }
             }
         }
@@ -60,16 +65,17 @@ pipeline {
         stage('Update Deployment File') {
             steps {
                 echo 'Updating Deployment File'
-                withCredentials([string(credentialsId: 'GITHUB_TOKEN', variable: 'githubtoken')]) {
-                    sh '''
-                        git config user.email "ksri0610@gmail.com"
-                        git config user.name "ksri0610"
-                        BUILD_NUMBER=${BUILD_NUMBER}
-                        sed -i "s/batch14:.*/batch14:${BUILD_NUMBER}/g" deploymentfiles/deployment.yml
-                        git add .
-                        git commit -m "Update deployment image to version ${BUILD_NUMBER}"
-                        git push https://${githubtoken}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
-                    '''
+                script {
+                    withCredentials([usernamePassword(credentialsId: 'githubtoken', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')]) {
+                        sh """
+                            git config user.email "ksri0610@gmail.com"
+                            git config user.name "ksri0610"
+                            sed -i "s/batch14:.*/batch14:${env.BUILD_NUMBER}/g" deploymentfiles/deployment.yml
+                            git add .
+                            git commit -m "Update deployment image to version ${env.BUILD_NUMBER}"
+                            git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git HEAD:main
+                        """
+                    }
                 }
             }
         }
@@ -77,13 +83,13 @@ pipeline {
 
     post {
         always {
-            script {
-                if (currentBuild.result == 'SUCCESS') {
-                    echo "Build #${env.BUILD_NUMBER} of ${env.JOB_NAME} succeeded."
-                } else {
-                    echo "Build #${env.BUILD_NUMBER} of ${env.JOB_NAME} failed."
-                }
-            }
+            echo "Build #${env.BUILD_NUMBER} of ${env.JOB_NAME} completed with status: ${currentBuild.result}"
+        }
+        success {
+            echo 'Pipeline executed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed!'
         }
     }
 }
