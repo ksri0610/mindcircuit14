@@ -51,7 +51,7 @@ pipeline {
                     withCredentials([string(credentialsId: 'DOCKERHUB_CREDENTIALS', variable: 'dockerhub')]) {
                         sh 'docker login -u dockerksri0610 -p ${dockerhub}'
                     }
-                    sh 'docker push devopshubg333/batch14:${BUILD_NUMBER}'
+                    sh 'docker push dockerksri0610/batch14:${BUILD_NUMBER}'
                     echo 'Pushed to Dockerhub'
                 }
             }
