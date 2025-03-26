@@ -17,7 +17,7 @@ pipeline {
             steps {
                 echo 'Cloning GitHub Repository'
                 git branch: 'main', 
-                     url: "https://github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git",
+                     url: "'https://github.com/ksri0610/mindcircuit14.git'/${GIT_USER_NAME}/${GIT_REPO_NAME}.git",
                      credentialsId: 'githubtoken'
             }
         }
